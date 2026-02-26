@@ -7,22 +7,19 @@ resource "aws_ecs_cluster" "strapi_cluster" {
   name = "strapi-cluster"
 }
 
-# 2. ECR Repository 
-resource "aws_ecr_repository" "strapi_app" {
-  name                 = "strapi-app"
-  force_delete         = true
-  image_tag_mutability = "MUTABLE"
+# 2. Use EXISTING ECR Repository (No more AlreadyExists error!)
+data "aws_ecr_repository" "strapi_app" {
+  name = "strapi-app"
 }
 
-# 3. ECS Service (RE-CREATED WITHOUT CODE_DEPLOY)
+# 3. ECS Service
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service-v2" # Changed name to force a clean start
+  name            = "strapi-service-v3" # New name to bypass any old locks
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = "strapi-task" 
   desired_count   = 1
   launch_type     = "FARGATE"
 
-  # THIS IS THE CRITICAL PART TO FIX YOUR ERROR
   deployment_controller {
     type = "ECS" 
   }

@@ -7,7 +7,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-app
-  ECS_SERVICE: strapi-service-v2 # Updated name
+  ECS_SERVICE: strapi-service-v3
   ECS_CLUSTER: strapi-cluster
   ECS_TASK_DEFINITION: .aws/task-def.json
   CONTAINER_NAME: strapi-container
