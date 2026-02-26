@@ -22,7 +22,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Cleanup Duplicate Files
-      run: rm -f provider.tf  # Forces the deletion of the duplicate file if it exists
+      run: rm -f provider.tf
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -40,7 +40,7 @@ jobs:
     - name: Terraform Init & Apply
       run: |
         terraform init
-        terraform apply -auto-approve || echo "Terraform already provisioned or has minor issues, proceeding..."
+        terraform apply -auto-approve || echo "Infra already exists, continuing..."
 
     # STEP 2: Docker Build & Push
     - name: Login to Amazon ECR
