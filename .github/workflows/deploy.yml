@@ -1,4 +1,4 @@
-name: Full Strapi CI-CD
+name: Final Strapi CI-CD
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 1. AUTHENTICATION (AWS)
+    # 1. AWS AUTH
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -29,12 +29,12 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # 2. CI PART: Login to ECR (Replaces Docker Login)
+    # 2. LOGIN TO ECR
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    # 3. CI PART: Build and Push
+    # 3. BUILD & PUSH (CI)
     - name: Build and Push Image
       id: build-image
       uses: docker/build-push-action@v5
@@ -43,8 +43,8 @@ jobs:
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-    # 4. CD PART: Update ECS
-    - name: Fill in the new image ID in the ECS task definition
+    # 4. UPDATE TASK DEF
+    - name: Fill in the new image ID
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
@@ -52,6 +52,7 @@ jobs:
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
+    # 5. DEPLOY TO ECS (CD)
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
