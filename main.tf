@@ -14,13 +14,18 @@ resource "aws_ecr_repository" "strapi_app" {
   image_tag_mutability = "MUTABLE"
 }
 
-# 3. ECS Service
+# 3. ECS Service (RE-CREATED WITHOUT CODE_DEPLOY)
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service"
+  name            = "strapi-service-v2" # Changed name to force a clean start
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = "strapi-task" 
   desired_count   = 1
   launch_type     = "FARGATE"
+
+  # THIS IS THE CRITICAL PART TO FIX YOUR ERROR
+  deployment_controller {
+    type = "ECS" 
+  }
 
   network_configuration {
     subnets          = ["subnet-077310516cd53e746", "subnet-03328ca5b606c3a5f"]

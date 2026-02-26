@@ -7,7 +7,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: strapi-app
-  ECS_SERVICE: strapi-service
+  ECS_SERVICE: strapi-service-v2 # Updated name
   ECS_CLUSTER: strapi-cluster
   ECS_TASK_DEFINITION: .aws/task-def.json
   CONTAINER_NAME: strapi-container
@@ -26,6 +26,17 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
+    # 1. Terraform will now kill the "Locked" service and create a "Standard" one
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_wrapper: false
+
+    - name: Terraform Init & Apply
+      run: |
+        terraform init
+        terraform apply -auto-approve
+
     - name: Login to ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
@@ -38,21 +49,14 @@ jobs:
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-    # Register the Task Definition and get the ARN
-    - name: Register new Task Definition
-      id: register-task
+    # 2. Register and Update via CLI (Safest way)
+    - name: Register and Update Service
       run: |
-        # Replace the placeholder image in the JSON with the real one
         sed -i 's|placeholder|${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|g' ${{ env.ECS_TASK_DEFINITION }}
-        
-        # Register the task and capture the ARN
         TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://${{ env.ECS_TASK_DEFINITION }} --query 'taskDefinition.taskDefinitionArn' --output text)
-        echo "TASK_ARN=$TASK_ARN" >> $GITHUB_ENV
-
-    - name: Update ECS Service via CLI
-      run: |
+        
         aws ecs update-service \
           --cluster ${{ env.ECS_CLUSTER }} \
           --service ${{ env.ECS_SERVICE }} \
-          --task-definition ${{ env.TASK_ARN }} \
+          --task-definition $TASK_ARN \
           --force-new-deployment
