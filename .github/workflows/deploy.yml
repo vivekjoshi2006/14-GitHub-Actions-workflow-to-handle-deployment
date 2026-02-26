@@ -26,7 +26,6 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # 1. Terraform will now kill the "Locked" service and create a "Standard" one
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
@@ -36,7 +35,6 @@ jobs:
       run: |
         terraform init
         terraform apply -auto-approve
-
     - name: Login to ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2

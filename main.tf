@@ -14,7 +14,7 @@ data "aws_ecr_repository" "strapi_app" {
 
 # 3. ECS Service
 resource "aws_ecs_service" "strapi_service" {
-  name            = "strapi-service-v3"
+  name            = "strapi-service-v3" # New name to bypass any old locks
   cluster         = aws_ecs_cluster.strapi_cluster.id
   task_definition = "strapi-task" 
   desired_count   = 1
