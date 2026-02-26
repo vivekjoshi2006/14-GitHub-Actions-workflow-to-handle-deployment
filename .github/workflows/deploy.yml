@@ -28,7 +28,7 @@ jobs:
         cache: 'npm'
 
     - name: Install Dependencies
-      run: npm install
+      run: npm install --prefer-offline --no-audit --progress=false
 
     - name: Build Strapi Project
       run: npm run build
@@ -45,6 +45,11 @@ jobs:
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Create ECR repo if not exists
+      run: |
+        aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || \
+        aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}
 
     - name: Build, Tag, and Push Image to ECR
       id: build-image
