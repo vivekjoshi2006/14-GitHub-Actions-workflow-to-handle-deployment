@@ -1,8 +1,8 @@
-name: Full Strapi Deploy
+name: Full Strapi CI-CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main" ] 
 
 env:
   AWS_REGION: us-east-1
@@ -14,34 +14,27 @@ env:
 
 jobs:
   deploy:
+    name: CI and CD Execution
     runs-on: ubuntu-latest
+    
     steps:
-    - name: Checkout
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Configure AWS
+    # 1. AWS Authentication
+    - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # 1. Terraform will now kill the "Locked" service and create a "Standard" one
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_wrapper: false
-
-    - name: Terraform Init & Apply
-      run: |
-        terraform init
-        terraform apply -auto-approve
-
-    - name: Login to ECR
+    # 2. CI PART: Docker Login & Build
+    - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build and Push Image
+    - name: Build, Tag, and Push Image to ECR
       id: build-image
       uses: docker/build-push-action@v5
       with:
@@ -49,14 +42,19 @@ jobs:
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-    # 2. Register and Update via CLI (Safest way)
-    - name: Register and Update Service
-      run: |
-        sed -i 's|placeholder|${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|g' ${{ env.ECS_TASK_DEFINITION }}
-        TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://${{ env.ECS_TASK_DEFINITION }} --query 'taskDefinition.taskDefinitionArn' --output text)
-        
-        aws ecs update-service \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --service ${{ env.ECS_SERVICE }} \
-          --task-definition $TASK_ARN \
-          --force-new-deployment
+    # 3. CD PART: Update Task Definition & Deploy
+    - name: Render New Task Definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+    - name: Deploy to Amazon ECS (Rolling Update)
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
