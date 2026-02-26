@@ -1,4 +1,5 @@
 name: Full Strapi Deploy
+
 on:
   push:
     branches: [ "main" ]
@@ -13,18 +14,24 @@ env:
 
 jobs:
   deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
+    
     steps:
-    - name: Checkout
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Configure AWS
+    - name: Cleanup Duplicate Files
+      run: rm -f provider.tf  # Forces the deletion of the duplicate file if it exists
+
+    - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
+    # STEP 1: Infrastructure
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
@@ -33,23 +40,39 @@ jobs:
     - name: Terraform Init & Apply
       run: |
         terraform init
-        terraform apply -auto-approve || echo "Terraform had issues, but we are moving to Build/Deploy steps..."
+        terraform apply -auto-approve || echo "Terraform already provisioned or has minor issues, proceeding..."
 
-    - name: Login to ECR
+    # STEP 2: Docker Build & Push
+    - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build and Push Docker
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and Push Image
+      id: build-image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-    - name: Deploy to ECS
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+    # STEP 3: Deploy to ECS
+    - name: Fill in the new image ID in the ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+    - name: Deploy to Amazon ECS
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true

@@ -22,7 +22,6 @@ resource "aws_ecs_service" "strapi_service" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
-  # Important for Fargate
   network_configuration {
     subnets          = ["subnet-077310516cd53e746", "subnet-03328ca5b606c3a5f"]
     assign_public_ip = true
