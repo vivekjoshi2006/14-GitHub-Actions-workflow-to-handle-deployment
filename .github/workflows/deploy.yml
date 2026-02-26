@@ -14,41 +14,21 @@ env:
 
 jobs:
   deploy:
-    name: Build and Deploy
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout Repository
+    - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Cleanup Duplicate Files
-      run: rm -f provider.tf
-
-    - name: Configure AWS Credentials
+    - name: Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # STEP 1: Infrastructure setup (Skip if exists)
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_wrapper: false
-
-    - name: Terraform Init & Apply
-      run: |
-        terraform init
-        terraform apply -auto-approve || echo "Infra already exists, continuing to deploy..."
-
-    # STEP 2: Build & Push Image (Internship Requirement)
-    - name: Login to Amazon ECR
+    - name: Login to ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
 
     - name: Build and Push Image
       id: build-image
@@ -57,11 +37,8 @@ jobs:
         context: .
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
-    # STEP 3: Update Task Definition
-    - name: Fill in the new image ID in the ECS task definition
+    - name: Fill in the new image ID
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
@@ -69,11 +46,11 @@ jobs:
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-    # STEP 4: Standard Rolling Deployment (No CodeDeploy)
+    # FIXED STEP: No CodeDeploy, No AppSpec, No Deployment Group
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: true
+        wait-for-service-stability: false # Set to false for faster completion
