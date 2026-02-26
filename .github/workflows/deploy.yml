@@ -31,7 +31,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # STEP 1: Infrastructure
+    # STEP 1: Infrastructure setup (Skip if exists)
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
@@ -40,9 +40,9 @@ jobs:
     - name: Terraform Init & Apply
       run: |
         terraform init
-        terraform apply -auto-approve || echo "Infra already exists, continuing..."
+        terraform apply -auto-approve || echo "Infra already exists, continuing to deploy..."
 
-    # STEP 2: Docker Build & Push
+    # STEP 2: Build & Push Image (Internship Requirement)
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
@@ -60,7 +60,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    # STEP 3: Deploy to ECS
+    # STEP 3: Update Task Definition
     - name: Fill in the new image ID in the ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -69,6 +69,7 @@ jobs:
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
+    # STEP 4: Standard Rolling Deployment (No CodeDeploy)
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
