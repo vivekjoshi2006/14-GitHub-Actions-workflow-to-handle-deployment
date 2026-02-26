@@ -28,7 +28,7 @@ jobs:
         cache: 'npm'
 
     - name: Install Dependencies
-      run: npm ci
+      run: npm install
 
     - name: Build Strapi Project
       run: npm run build
@@ -49,7 +49,6 @@ jobs:
     - name: Build, Tag, and Push Image to ECR
       id: build-image
       env:
-        # FIXED: Changed 'id' to 'steps'
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
