@@ -38,19 +38,21 @@ jobs:
         push: true
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-    - name: Fill in the new image ID
-      id: task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: ${{ env.ECS_TASK_DEFINITION }}
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+    # Register the Task Definition and get the ARN
+    - name: Register new Task Definition
+      id: register-task
+      run: |
+        # Replace the placeholder image in the JSON with the real one
+        sed -i 's|placeholder|${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|g' ${{ env.ECS_TASK_DEFINITION }}
+        
+        # Register the task and capture the ARN
+        TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://${{ env.ECS_TASK_DEFINITION }} --query 'taskDefinition.taskDefinitionArn' --output text)
+        echo "TASK_ARN=$TASK_ARN" >> $GITHUB_ENV
 
-    # FIXED STEP: No CodeDeploy, No AppSpec, No Deployment Group
-    - name: Deploy to Amazon ECS
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-      with:
-        task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: false # Set to false for faster completion
+    - name: Update ECS Service via CLI
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE }} \
+          --task-definition ${{ env.TASK_ARN }} \
+          --force-new-deployment
